@@ -1,6 +1,65 @@
 import cv2
 import os
+import unittest
+import numpy as np
 from card_detector import CardDetector
+
+# Ground truth for gpk-37a.png (x, y)
+# Top-left: (50, 28)
+# Top-right: (1118, 18)
+# Bottom-right: (1138, 1528)
+# Bottom-left: (46, 1534)
+GROUND_TRUTH_GPK_37A = {
+    "top_left": (50, 28),
+    "top_right": (1118, 18),
+    "bottom_right": (1138, 1528),
+    "bottom_left": (46, 1534),
+}
+
+class TestCardDetector(unittest.TestCase):
+    def setUp(self):
+        self.detector = CardDetector()
+        self.test_image_path = "data/gpk-37a.png"
+        self.gpk_37a_ground_truth = np.array([
+            GROUND_TRUTH_GPK_37A["top_left"],
+            GROUND_TRUTH_GPK_37A["top_right"],
+            GROUND_TRUTH_GPK_37A["bottom_right"],
+            GROUND_TRUTH_GPK_37A["bottom_left"]
+        ], dtype="float32")
+
+    def assertCornersClose(self, detected_corners, ground_truth_corners, tolerance=4):
+        self.assertIsNotNone(detected_corners, "Corners were not detected.")
+        self.assertEqual(detected_corners.shape, ground_truth_corners.shape, "Shape of detected corners does not match ground truth.")
+        for i in range(len(ground_truth_corners)):
+            # Compare point by point
+            det_pt = detected_corners[i]
+            gt_pt = ground_truth_corners[i]
+            self.assertAlmostEqual(det_pt[0], gt_pt[0], delta=tolerance,
+                                   msg=f"Corner {i} X-coordinate mismatch: detected {det_pt}, ground truth {gt_pt}")
+            self.assertAlmostEqual(det_pt[1], gt_pt[1], delta=tolerance,
+                                   msg=f"Corner {i} Y-coordinate mismatch: detected {det_pt}, ground truth {gt_pt}")
+
+    def test_find_card_edges_gpk_37a(self):
+        """Tests card edge detection for data/gpk-37a.png against ground truth."""
+        print(f"\nRunning test_find_card_edges_gpk_37a with image: {self.test_image_path}")
+        original_image, detected_edges = self.detector.find_card_edges(self.test_image_path)
+
+        self.assertIsNotNone(original_image, "Original image could not be loaded.")
+        if detected_edges is None:
+            # Save the image with no detection for debugging
+            cv2.imwrite("output/failed_detection_gpk_37a.png", original_image)
+            print("Test failed: No card edges detected. Saved original image to output/failed_detection_gpk_37a.png")
+        else:
+            print(f"Detected edges for gpk-37a: {detected_edges}")
+            # Save the image with detected edges for visual inspection
+            debug_image = self.detector.draw_edges(original_image.copy(), detected_edges)
+            # Ensure output directory exists
+            if not os.path.exists("output"):
+                os.makedirs("output")
+            cv2.imwrite("output/detected_edges_gpk_37a.png", debug_image)
+            print("Saved image with detected edges to output/detected_edges_gpk_37a.png")
+
+        self.assertCornersClose(detected_edges, self.gpk_37a_ground_truth, tolerance=4)
 
 def main():
     # Path to the directory containing test images
@@ -62,5 +121,7 @@ def main():
     cv2.destroyAllWindows()
     print("Test script finished.")
 
+
 if __name__ == "__main__":
-    main()
+    # main() # Comment out direct execution if running as unittest
+    unittest.main()
