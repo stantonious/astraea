@@ -22,7 +22,9 @@ def find_long_lines(image_path, min_length=800):
 
     # Step 4: Implement image preprocessing
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    edges = cv2.Canny(gray, 50, 150, apertureSize=3)
+    # Hough Attempt 3: Canny(30,90) with lenient Hough
+    edges = cv2.Canny(gray, 30, 90, apertureSize=3)
+    # cv2.imwrite("data/canny_edges_30_90_Hough3.png", edges) # Optional: save intermediate Canny output
 
     # Step 5: Implement line detection
     # Using HoughLinesP which directly gives line segments
@@ -32,7 +34,8 @@ def find_long_lines(image_path, min_length=800):
     # threshold: Accumulator threshold parameter. Only those lines are returned that get enough votes.
     # minLineLength: Minimum line length. Line segments shorter than this are rejected.
     # maxLineGap: Maximum allowed gap between points on the same line to link them.
-    lines_p = cv2.HoughLinesP(edges, 1, np.pi / 180, threshold=100, minLineLength=50, maxLineGap=10)
+    # Reverting to parameters from Hough Attempt 4 / Canny(30,90) which gave best Y-match
+    lines_p = cv2.HoughLinesP(edges, 1, np.pi / 360, threshold=30, minLineLength=10, maxLineGap=20)
 
     long_lines = []
     if lines_p is not None:
