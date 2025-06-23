@@ -5,14 +5,14 @@ import numpy as np
 class CardDetector:
     def __init__(self, gaussian_blur_kernel_size=(5, 5), canny_threshold1=50, canny_threshold2=150):
         self.gaussian_blur_kernel_size = gaussian_blur_kernel_size
-    def __init__(self, gaussian_blur_kernel_size=(5, 5), canny_threshold1=30, canny_threshold2=100): # Adjusted Canny
+    def __init__(self, gaussian_blur_kernel_size=(5, 5), canny_threshold1=30, canny_threshold2=100): # Reset to moderate for morph test
         self.gaussian_blur_kernel_size = gaussian_blur_kernel_size
         self.canny_threshold1 = canny_threshold1
         self.canny_threshold2 = canny_threshold2
         # Expected aspect ratio: width/height or height/width - Increased tolerance to 10%
         self.expected_aspect_ratio_range = ( (2.5 / 3.5) * 0.90, (2.5 / 3.5) * 1.10 )
         self.expected_aspect_ratio_range_inv = ( (3.5 / 2.5) * 0.90, (3.5 / 2.5) * 1.10 )
-        self.min_contour_area_factor = 0.05 # Reduced min area factor
+        self.min_contour_area_factor = 0.05 # Reset min area factor
 
     def _load_and_preprocess_image(self, image_path):
         """Loads an image, converts to grayscale, and applies Gaussian blur."""
@@ -30,8 +30,12 @@ class CardDetector:
         # Perform Canny edge detection
         edges_map = cv2.Canny(preprocessed_image, self.canny_threshold1, self.canny_threshold2)
 
-        # Find contours
-        contours, _ = cv2.findContours(edges_map, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        # Morphological Closing operation
+        kernel_morph = np.ones((5,5),np.uint8) # 5x5 kernel for closing
+        closed_edges_map = cv2.morphologyEx(edges_map, cv2.MORPH_CLOSE, kernel_morph)
+
+        # Find contours on the closed edge map
+        contours, _ = cv2.findContours(closed_edges_map, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
         # Sort contours by area (descending) and filter
         if not contours:
@@ -51,7 +55,7 @@ class CardDetector:
 
             # Approximate the contour to a polygon
             perimeter = cv2.arcLength(contour, True)
-            approx = cv2.approxPolyDP(contour, 0.03 * perimeter, True) # Increased epsilon slightly
+            approx = cv2.approxPolyDP(contour, 0.02 * perimeter, True) # Standard epsilon
 
             # The card should be a quadrilateral
             if len(approx) == 4:

@@ -4,11 +4,14 @@ from card_detector import CardDetector
 
 def main():
     # Path to the directory containing test images
+    # Path to the directory containing test images
     data_dir = "data/"
     image_files = [os.path.join(data_dir, f) for f in os.listdir(data_dir) if f.lower().endswith(('.png', '.jpg', '.jpeg', '.webp'))]
+    # image_files = ["data/gpk-20b.webp"] # Test gpk-20b.webp with new settings
 
     if not image_files:
-        print(f"No images found in {data_dir}. Please add some test images.")
+        # This case should not be reached if we are hardcoding the file.
+        print(f"No images found. Please add some test images.")
         return
 
     # Initialize the card detector
