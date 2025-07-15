@@ -155,16 +155,21 @@ def get_border_mask(
         border_img = to_quant(image, next_k, debug=debug)
         border_img = to_normal(border_img, debug=debug)
 
-        c = border_color or get_border_color(
-            border_img,
-            min_thresh=230,
-            min_num_consecutive=border_pixels,
-            reverse_walk=reverse_border_walk,
-        )
+        if border_color is not None:
+            print ('setting color to provided border color',border_color)
+            c = border_color
+        else:
+            c = get_border_color(
+                border_img,
+                min_thresh=230,
+                min_num_consecutive=border_pixels,
+                reverse_walk=reverse_border_walk,
+            )
 
     if c is None:
         return None, None, None, None
 
+    print('c is ',c)
     if c >= 255:
         c = 254
     print(
@@ -204,12 +209,14 @@ def apply_clahe(img):
 
 def get_max_contour(contours):
     max_ctr_area = 0
-    max_ctr_area_idx = -1
+    max_ctr_area_idx = 0
     for _i, contour in enumerate(contours):
         ctr_area = cv2.contourArea(contour)
         if ctr_area > max_ctr_area:
             max_ctr_area = ctr_area
             max_ctr_area_idx = _i
+
+    print("idx", max_ctr_area_idx)
     return contours[max_ctr_area_idx], max_ctr_area_idx, max_ctr_area
 
 
@@ -604,7 +611,7 @@ def score_edges(img_cntr, ideal_cntr):
 
 def score_card(image_path, debug=False):
     results = {}
-    image, img_mask, orig, contours, c_idx, opt_k = opt_border(
+    image, img_mask, orig, contours, c_idx, opt_k, opt_c = opt_border(
         image_path, max_iter=10, clahe=True, debug=debug
     )
 
@@ -642,12 +649,37 @@ def score_card(image_path, debug=False):
             _n_corner,
             quant_k=list(range(15, 3, -2)),
             border_color=border_corner_color,
+            border_pixels=20,
             blur=False,
-            debug=debug,
+            debug=False,
             clahe=True,
             remove_shadows=False,
             threshold_width=2,
         )
+        if color is None:  # try again but other direction
+            print("trying reverse border walk")
+            _, mask, _, color = get_border_mask(
+                _n_corner,
+                quant_k=list(range(15, 3, -2)),
+                border_color=border_corner_color,
+                blur=False,
+                debug=debug,
+                clahe=True,
+                remove_shadows=False,
+                threshold_width=2,
+                reverse_border_walk=True,
+            )
+        if color is None:
+            _, mask, _, color = get_border_mask(
+                _n_corner,
+                quant_k=list(range(15, 3, -2)),
+                border_color=opt_c,
+                blur=False,
+                debug=debug,
+                clahe=True,
+                remove_shadows=False,
+                threshold_width=2,
+            )
         if border_corner_color is None:
             border_corner_color = color  # TODO this is hacky, fix
         contours = get_contours(mask)
@@ -672,8 +704,12 @@ def score_card(image_path, debug=False):
     print("ideals", edge_ideal_contour[1])
     edge_ideal_contour[1] -= np.asarray([0, warp_img.shape[0] - (clip_ext * 2)])
     edge_ideal_contour[3] -= np.asarray([warp_img.shape[1] - (clip_ext * 2), 0])
-    edge_ideal_straight_contour[1] -= np.asarray([0, warp_img.shape[0] - (clip_ext * 2)])
-    edge_ideal_straight_contour[3] -= np.asarray([warp_img.shape[1] - (clip_ext * 2), 0])
+    edge_ideal_straight_contour[1] -= np.asarray(
+        [0, warp_img.shape[0] - (clip_ext * 2)]
+    )
+    edge_ideal_straight_contour[3] -= np.asarray(
+        [warp_img.shape[1] - (clip_ext * 2), 0]
+    )
     print("ideals", edge_ideal_contour[1])
 
     for _i, _n_edge in enumerate(edges):
@@ -687,6 +723,20 @@ def score_card(image_path, debug=False):
             remove_shadows=False,
             threshold_width=2,
         )
+        if color is None:  # try again but other direction
+            print("trying reverse border walk")
+            _, mask, _, color = get_border_mask(
+                _n_edge,
+                quant_k=list(range(15, 3, -2)),
+                border_color=border_corner_color,
+                blur=False,
+                debug=debug,
+                clahe=True,
+                remove_shadows=False,
+                threshold_width=2,
+                reverse_border_walk=True,
+            )
+
         if border_corner_color is None:
             border_corner_color = color  # TODO this is hacky, fix
         contours = get_contours(mask)
@@ -716,7 +766,7 @@ def score_card(image_path, debug=False):
 
 
 def opt_border(
-    image_path, min_c_area=5e5, max_c_area=2.0e6, max_iter=5, clahe=False, debug=False
+    image_path, min_c_area=1e5, max_c_area=2.0e6, max_iter=5, clahe=False, debug=False
 ):
     _k = 15
     _border_pixels = 20
@@ -724,7 +774,7 @@ def opt_border(
 
     for _n in range(max_iter):
         print("trying k ", _k)
-        image, mask, orig, c = get_border_mask(
+        image, mask, orig, border_c = get_border_mask(
             image_path,
             border_pixels=_border_pixels,
             quant_k=_k,
@@ -745,14 +795,16 @@ def opt_border(
             continue
         contours = get_contours(mask)
         c, c_idx, c_area = get_uniform_contour(contours, min_area=5e3)
+        print("area check ", c_area, min_c_area, max_c_area)
+
         if c_area >= min_c_area and c_area <= max_c_area:
-            return image, mask, orig, contours, c_idx, _k
+            return image, mask, orig, contours, c_idx, _k, border_c
         elif c_area > max_c_area:
             _k += 2
         else:
             _k -= 2
             _k = _k if _k > 0 else 1
-    return None, None, None, None, None
+    return None, None, None, None, None, None, None
 
 
 def find_nameplate(img):
